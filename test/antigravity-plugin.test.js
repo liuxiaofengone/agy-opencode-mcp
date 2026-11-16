@@ -172,6 +172,7 @@ test("Antigravity skill and documentation enforce delegation boundaries and expl
   assert.match(skill, /swarm/);
   assert.match(skill, /call_mcp_tool/);
   assert.match(skill, /opencode_models/);
+  assert.match(skill, /opencode models --standalone/);
   assert.match(skill, /git diff/);
 
   const zh = readFileSync(readmeZh, "utf8");

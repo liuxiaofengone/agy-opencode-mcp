@@ -15,7 +15,7 @@ Antigravity owns the specification, implementation plan, `git diff` review, inde
 
 ## Rules
 
-- **Never bypass the MCP server**: do not run `opencode` via `run_command` to execute delegated tasks.
+- **Never bypass the MCP server**: do not run `opencode` via `run_command` to execute delegated tasks (a read-only `opencode models --standalone` lookup is allowed only as a fallback when `opencode_models` is disabled or unavailable in the MCP session).
 - **Never substitute Antigravity native subagents**: when the user asks to delegate to OpenCode, do not use `invoke_subagent`, `swarm`, or `research` instead of the `opencode-delegate` MCP tools.
 - **Tool loading in Antigravity**:
   - Read-only inspection tools (`opencode_doctor`, `opencode_models`, `opencode_status`) are eagerly registered (`eager: true`).
@@ -23,11 +23,14 @@ Antigravity owns the specification, implementation plan, `git diff` review, inde
 - **Explicit `model` is REQUIRED on every delegation**:
   - Every `opencode_execute` and `opencode_start` call must pass a complete `provider/model` ID (optionally with `#variant`, e.g. `provider/model#high`).
   - Only use a model explicitly specified by the user or explicitly authorized for the current task.
-  - If the user has not specified a model, call `opencode_models` to list configured IDs and ask the user to choose. Never guess, infer from display labels, or fall back to defaults/free models.
+  - If the user has not specified a model, **always fetch and display the available model list before asking the user to choose** (never ask the user to type a `provider/model` ID blindly without showing options):
+    1. Call `opencode_models` first to retrieve configured `provider/model` IDs.
+    2. If `opencode_models` is disabled or unavailable in the current MCP session, run `opencode models --standalone` via `run_command` as a read-only fallback (and mention that `opencode_models` can be enabled in Antigravity's MCP tool settings).
+    3. Present the retrieved `provider/model` IDs clearly (e.g., via `ask_question` when concise, or grouped by provider when large) and let the user pick one. Never guess, infer from display labels, or fall back to defaults/free models.
   - If a model fails (rate limit, auth, region, or unavailable error), report the error and stop; never silently switch to another model.
 - **Scope and permissions**:
   - Read-only analysis must keep `readOnly: true` and `standalone: true` (default). This injects an isolated `agy-mcp-reader` agent that denies edit, write, shell, external-directory, and network tools. Note: OpenCode permissions are not an OS sandbox; exclude `.env`, private keys, and sensitive files in the task brief.
-  - Implementation or command tasks require explicit `readOnly: false` plus clear allowed files, boundaries, and verification commands. Enable `autoApprove: true` only when the user authorizes non-interactive approval of non-denied tools.
+  - Implementation or command tasks require explicit `readOnly: false` plus clear allowed files, boundaries, and verification commands. Enable `autoApprove: true` only when the user authorizes non-interactive approval of non-denied tools (either for the specific task or as an explicit session/project authorization—no need to re-prompt on every call within an already-authorized scope).
   - Session continuation (`sessionId`, `continueSession`) is unsupported by this bridge; each call starts a clean session so `cwd` and permissions remain authoritative.
 
 ## Sync vs Async Execution
@@ -39,7 +42,7 @@ Antigravity owns the specification, implementation plan, `git diff` review, inde
 
 ## Delegation Workflow
 
-1. **Confirm model**: verify the user's explicit `provider/model[#variant]` (or call `opencode_models` first and ask).
+1. **Confirm model**: verify the user's explicit `provider/model[#variant]`; if unspecified, fetch and display the model list via `opencode_models` (or `opencode models --standalone` fallback if disabled) before asking the user to choose.
 2. **Pass a tight `cwd`**: pass an existing absolute directory containing the task's files (or the project root). Never pass a relative path, `$HOME`, or `/`.
 3. **Write a bounded `task` brief** (at least 10 characters, never starting with `-`):
    - Goal and expected output format.
