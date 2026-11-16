@@ -1,0 +1,17 @@
+{
+  "name": "opencode-delegate",
+  "displayName": "OpenCode Delegate",
+  "version": "0.5.0",
+  "description": "Delegate read-only project analysis and bounded coding tasks from Antigravity to local OpenCode 2 with explicit model selection.",
+  "author": {
+    "name": "liuxiaofengone",
+    "url": "https://github.com/liuxiaofengone"
+  },
+  "repository": "https://github.com/liuxiaofengone/agy-opencode-mcp",
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "Run opencode_doctor with deep=true and list available OpenCode models",
+    "Use OpenCode in read-only mode to analyze this repository structure and entrypoints",
+    "Delegate a bounded implementation task to OpenCode and independently verify the git diff"
+  ]
+}

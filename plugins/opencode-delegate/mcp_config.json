@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "opencode-delegate": {
+      "command": "node",
+      "args": [
+        "${PLUGIN_ROOT}/mcp/server.mjs"
+      ],
+      "cwd": "${PLUGIN_ROOT}",
+      "timeoutSeconds": 3660,
+      "env": {
+        "OPENCODE_BIN": ""
+      },
+      "tools": {
+        "opencode_doctor": {
+          "eager": true
+        },
+        "opencode_models": {
+          "eager": true
+        },
+        "opencode_status": {
+          "eager": true
+        }
+      }
+    }
+  }
+}
