@@ -11,7 +11,7 @@ Ported from [liuxiaofengone/opencode-mcp](https://github.com/liuxiaofengone/open
 - **Clear Responsibility Split**: Antigravity acts as planner, reviewer, and verifier; local OpenCode 2 runs as a bounded executor inside an isolated session (`--format json`) and returns structured results with Git context (`diffStat`, `statusShort`).
 - **Native Antigravity Plugin (`plugins/opencode-delegate/`)**: Ships [plugin.json](plugins/opencode-delegate/plugin.json), [mcp_config.json](plugins/opencode-delegate/mcp_config.json) (`${PLUGIN_ROOT}/mcp/server.mjs`, `timeoutSeconds: 3660`), [assets/logo.svg](plugins/opencode-delegate/assets/logo.svg), and the [opencode-delegate skill](plugins/opencode-delegate/skills/opencode-delegate/SKILL.md) with [reference.md](plugins/opencode-delegate/skills/opencode-delegate/reference.md).
 - **Zero-Install Single-File Bundle**: [build-plugin.mjs](scripts/build-plugin.mjs) bundles `server.mjs` and `src/` with `esbuild` into `plugins/opencode-delegate/mcp/server.mjs` (tracked in Git), so the plugin runs offline without `npm install`.
-- **Eager / Lazy Tool Split & Gemini Schema Compatibility**: Read-only diagnostic and status tools (`opencode_doctor`, `opencode_models`, `opencode_status`) are marked `"eager": true` in [mcp_config.json](plugins/opencode-delegate/mcp_config.json). Execution and cancellation tools (`opencode_execute`, `opencode_start`, `opencode_cancel`) stay lazy-loaded for `call_mcp_tool`, and all integer schema bounds stay within 32-bit signed limits.
+- **Lazy Tool Loading & Gemini Schema Compatibility**: All 6 tools (`opencode_doctor`, `opencode_models`, `opencode_status`, `opencode_execute`, `opencode_start`, `opencode_cancel`) are lazy-loaded via `call_mcp_tool` ([mcp_config.json](plugins/opencode-delegate/mcp_config.json) intentionally avoids `"eager": true` so Antigravity does not drop tools from the enabled set), and all integer schema bounds stay within 32-bit signed limits.
 - **Mandatory Explicit Model Gate**: Every `opencode_execute` and `opencode_start` call requires a complete `provider/model[#variant]` ID (`MODEL_REQUIRED` / `MODEL_INVALID` rejects missing or malformed IDs before spawning). Use `opencode_models` to inspect configured models first—there is no silent default or fallback model selection.
 - **Read-Only & Isolation Defaults**: Defaults to `readOnly: true`, `standalone: true`, and `autoApprove: false`, injecting an isolated `agy-mcp-reader` agent via `OPENCODE_CONFIG_CONTENT` (overriding both legacy and native permission fields to deny `edit`, `write`, `patch`, `bash`, `shell`, `task`, `external_directory`, `webfetch`, and `websearch`). Session continuation (`sessionId`, `continueSession: true`) is rejected so `cwd` and permissions remain authoritative. *(Note: OpenCode permissions are application-level controls, not an OS sandbox; exclude sensitive files such as `.env` or private keys in task briefs.)*
 - **Shell-Free Execution, Redaction & Process-Tree Cleanup**: Never spawns OpenCode through a shell (`shell: false`) and rejects `.cmd`/`.bat`/`.ps1` wrappers for `OPENCODE_BIN`. Redacts common credentials (`server password`, `Bearer` tokens, API keys/passwords) from output and errors, caps stdout line/text/stderr buffers, and terminates owned process trees (`taskkill.exe /T /F` on Windows; process-group `SIGTERM`/`SIGKILL` on POSIX) on timeout, cancellation, or MCP disconnect.
@@ -22,9 +22,9 @@ Ported from [liuxiaofengone/opencode-mcp](https://github.com/liuxiaofengone/open
 
 | Tool | Loading | Purpose | Key Notes |
 | --- | --- | --- | --- |
-| `opencode_doctor` | Eager | Verify native OpenCode binary, `--version`, and optional `deep: true` model catalog probe | Read-only; rejects `.cmd`/`.bat`/`.ps1` wrappers |
-| `opencode_models` | Eager | List deduplicated `provider/model` IDs via `opencode models --standalone` | Supports `provider` prefix filter; invokes no LLM |
-| `opencode_status` | Eager | Poll async job state (`running`, `cancelling`, `completed`, `failed`, `cancelled`) and live progress | Reports `elapsedMs` and `lastEventAgeMs` |
+| `opencode_doctor` | Lazy | Verify native OpenCode binary, `--version`, and optional `deep: true` model catalog probe | Read-only; rejects `.cmd`/`.bat`/`.ps1` wrappers |
+| `opencode_models` | Lazy | List deduplicated `provider/model` IDs via `opencode models --standalone` | Supports `provider` prefix filter; invokes no LLM |
+| `opencode_status` | Lazy | Poll async job state (`running`, `cancelling`, `completed`, `failed`, `cancelled`) and live progress | Reports `elapsedMs` and `lastEventAgeMs` |
 | `opencode_execute` | Lazy | Run a bounded task synchronously in a fresh session | Requires `task`, `cwd`, `model`; default `timeoutMs: 900000` (max `3600000`) |
 | `opencode_start` | Lazy | Start an async background job and return `jobId` immediately | Max 4 active jobs; poll `opencode_status` |
 | `opencode_cancel` | Lazy | Abort an active job and terminate its owned process tree | Poll `opencode_status` until `cancelled` |
@@ -63,7 +63,7 @@ agy-opencode-mcp/
 │   └── version.mjs                     # Package/plugin version resolver
 ├── plugins/opencode-delegate/
 │   ├── plugin.json                     # Antigravity plugin manifest
-│   ├── mcp_config.json                 # MCP config (${PLUGIN_ROOT}/mcp/server.mjs, eager/lazy split)
+│   ├── mcp_config.json                 # MCP config (${PLUGIN_ROOT}/mcp/server.mjs, lazy loading)
 │   ├── mcp/server.mjs                  # Tracked single-file esbuild bundle
 │   ├── assets/logo.svg                 # Plugin icon
 │   └── skills/opencode-delegate/       # Delegation rules (SKILL.md) & reference (reference.md)

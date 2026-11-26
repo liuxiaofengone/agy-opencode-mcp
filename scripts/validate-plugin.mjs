@@ -223,6 +223,17 @@ function validate(pluginRootArg) {
     if (server.timeoutSeconds !== undefined && (typeof server.timeoutSeconds !== "number" || !Number.isFinite(server.timeoutSeconds) || server.timeoutSeconds <= 0)) {
       fail(`mcp config: server ${serverName} timeoutSeconds must be a positive finite number`);
     }
+    if (server.tools !== undefined) {
+      if (server.tools === null || typeof server.tools !== "object" || Array.isArray(server.tools)) {
+        fail(`mcp config: server ${serverName} tools must be an object when present`);
+      } else {
+        for (const [toolName, toolCfg] of Object.entries(server.tools)) {
+          if (toolCfg && typeof toolCfg === "object" && toolCfg.eager === true) {
+            fail(`mcp config: server ${serverName} tool ${toolName} must not set eager: true (Antigravity drops eager tools)`);
+          }
+        }
+      }
+    }
     let serverCwd = pluginRoot;
     if (server.cwd !== undefined) {
       const guardedCwd = guardPluginRelative(pluginRoot, `mcp config: server ${serverName} cwd`, server.cwd, { allowPluginRootMacro: true });

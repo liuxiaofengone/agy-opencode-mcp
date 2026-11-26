@@ -18,8 +18,8 @@ Antigravity owns the specification, implementation plan, `git diff` review, inde
 - **Never bypass the MCP server**: do not run `opencode` via `run_command` to execute delegated tasks (a read-only `opencode models --standalone` lookup is allowed only as a fallback when `opencode_models` is disabled or unavailable in the MCP session).
 - **Never substitute Antigravity native subagents**: when the user asks to delegate to OpenCode, do not use `invoke_subagent`, `swarm`, or `research` instead of the `opencode-delegate` MCP tools.
 - **Tool loading in Antigravity**:
-  - Read-only inspection tools (`opencode_doctor`, `opencode_models`, `opencode_status`) are eagerly registered (`eager: true`).
-  - Execution and cancellation tools (`opencode_execute`, `opencode_start`, `opencode_cancel`) are lazy-loaded: read their schema first and invoke them through `call_mcp_tool`.
+  - All 6 MCP tools (`opencode_doctor`, `opencode_models`, `opencode_status`, `opencode_execute`, `opencode_start`, `opencode_cancel`) are lazy-loaded via `call_mcp_tool` (`mcp_config.json` omits `"eager": true` so Antigravity does not drop `opencode_doctor`, `opencode_models`, or `opencode_status`).
+  - Read a tool's schema first and invoke it through `call_mcp_tool`.
 - **Explicit `model` is REQUIRED on every delegation**:
   - Every `opencode_execute` and `opencode_start` call must pass a complete `provider/model` ID (optionally with `#variant`, e.g. `provider/model#high`).
   - Only use a model explicitly specified by the user or explicitly authorized for the current task.

@@ -57,12 +57,22 @@ test("plugin manifest and mcp_config.json match Antigravity contract", () => {
   assert.equal(server.cwd, "${PLUGIN_ROOT}");
   assert.ok(Number.isFinite(server.timeoutSeconds) && server.timeoutSeconds >= 3600);
 
-  for (const eagerTool of ["opencode_doctor", "opencode_models", "opencode_status"]) {
-    assert.equal(server.tools?.[eagerTool]?.eager, true, `${eagerTool} must be eager: true`);
+  for (const toolName of ["opencode_doctor", "opencode_models", "opencode_status", "opencode_execute", "opencode_start", "opencode_cancel"]) {
+    assert.notEqual(server.tools?.[toolName]?.eager, true, `${toolName} must not set eager: true so Antigravity keeps it enabled`);
   }
-  for (const lazyTool of ["opencode_execute", "opencode_start", "opencode_cancel"]) {
-    assert.equal(server.tools?.[lazyTool]?.eager, undefined, `${lazyTool} must remain lazy so Antigravity does not drop it`);
-  }
+});
+
+test("validator rejects eager: true in mcp_config.json", async (t) => {
+  const copyDir = await mkdtemp(path.join(tmpdir(), "agyo-val-eager-"));
+  t.after(() => rm(copyDir, { recursive: true, force: true }));
+  await cp(PLUGIN_DIR, copyDir, { recursive: true });
+  const mcpPath = path.join(copyDir, "mcp_config.json");
+  const cfg = JSON.parse(readFileSync(mcpPath, "utf8"));
+  cfg.mcpServers["opencode-delegate"].tools = { opencode_models: { eager: true } };
+  await writeFile(mcpPath, JSON.stringify(cfg, null, 2), "utf8");
+  const res = await runValidator(copyDir);
+  assert.notEqual(res.code, 0);
+  assert.match(res.stderr, /must not set eager: true/);
 });
 
 test("MCP tool input schemas stay within Gemini 32-bit integer bounds", async () => {

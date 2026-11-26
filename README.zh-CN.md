@@ -11,7 +11,7 @@
 - **职责清晰分离**：Antigravity 负责规范制定、方案拆解、代码审查与最终验收；本机 OpenCode 2 在隔离的 `--format json` 会话中执行受控任务，并返回结构化结果与 Git 变更摘要（`diffStat`、`statusShort`）。
 - **原生 Antigravity 插件包（`plugins/opencode-delegate/`）**：内置 [plugin.json](plugins/opencode-delegate/plugin.json)、[mcp_config.json](plugins/opencode-delegate/mcp_config.json)（`${PLUGIN_ROOT}/mcp/server.mjs`，`timeoutSeconds: 3660`）、[assets/logo.svg](plugins/opencode-delegate/assets/logo.svg) 以及适配 Antigravity 协同规范的 [SKILL.md](plugins/opencode-delegate/skills/opencode-delegate/SKILL.md) 与 [reference.md](plugins/opencode-delegate/skills/opencode-delegate/reference.md)。
 - **免安装单文件 `esbuild` 产物**：[build-plugin.mjs](scripts/build-plugin.mjs) 将 `server.mjs` 与 `src/` 打包为 `plugins/opencode-delegate/mcp/server.mjs` 并纳入 Git 跟踪，用户安装插件后无需 `npm install` 即可离线运行。
-- **Eager / Lazy 工具分层与 Schema 兼容**：仅将只读诊断与状态查询工具（`opencode_doctor`、`opencode_models`、`opencode_status`）在 [mcp_config.json](plugins/opencode-delegate/mcp_config.json) 中设为 `"eager": true`；执行与取消工具（`opencode_execute`、`opencode_start`、`opencode_cancel`）保持懒加载（通过 `call_mcp_tool` 调用），且所有整型 schema 上限严格控制在 32 位有符号整数范围内。
+- **全量懒加载与 Schema 兼容**：全部 6 个工具（`opencode_doctor`、`opencode_models`、`opencode_status`、`opencode_execute`、`opencode_start`、`opencode_cancel`）均通过 `call_mcp_tool` 懒加载调用（[mcp_config.json](plugins/opencode-delegate/mcp_config.json) 刻意不配置 `"eager": true`，避免 Antigravity 丢弃工具），且所有整型 schema 上限严格控制在 32 位有符号整数范围内。
 - **强制显式模型选择与本机目录查询**：每次 `opencode_execute` / `opencode_start` 都必须传入完整的 `provider/model[#variant]`（缺失或格式错误会在启动 CLI 前以 `MODEL_REQUIRED` / `MODEL_INVALID` 拒绝，绝不使用默认模型或免费模型兜底）。可通过 `opencode_models` 先列出本机已配置模型供用户选择。
 - **默认只读与会话隔离**：默认 `readOnly: true`、`standalone: true`、`autoApprove: false`，通过 `OPENCODE_CONFIG_CONTENT` 注入隔离只读代理 `agy-mcp-reader`（同时覆盖新旧权限字段，拒绝 `edit`、`write`、`patch`、`bash`、`shell`、`task`、`external_directory`、`webfetch`、`websearch`）。禁用会话续接（`sessionId`、`continueSession: true` 均会被拒绝），确保每次调用的 `cwd` 与权限生效。*（注：OpenCode 权限并非 OS 级沙箱，仍需在任务描述中排除 `.env`、私钥等敏感文件。）*
 - **无 Shell 启动、凭据脱敏与进程树清理**：始终以 `shell: false` 启动本机原生可执行文件，拒绝将 `.cmd`/`.bat`/`.ps1` 包装脚本作为 `OPENCODE_BIN`；对输出和错误中的 `server password`、`Bearer`、API Key 等凭据自动脱敏并限制行/文本/stderr 长度；在超时、取消或 MCP 断连时强杀所属进程树（Windows 使用 `taskkill.exe /T /F`，POSIX 使用进程组 `SIGTERM`/`SIGKILL`）。
@@ -22,9 +22,9 @@
 
 | 工具名 | 加载方式 | 用途说明 | 关键说明 |
 | --- | --- | --- | --- |
-| `opencode_doctor` | Eager | 检查本机 OpenCode 原生二进制路径、`--version`，可选 `deep: true` 探测模型目录 | 纯只读诊断；拒绝 `.cmd`/`.bat`/`.ps1` |
-| `opencode_models` | Eager | 通过 `opencode models --standalone` 列出并去重 `provider/model` ID | 支持 `provider` 前缀过滤；不触发推理 |
-| `opencode_status` | Eager | 查询后台任务状态（`running` / `cancelling` / `completed` / `failed` / `cancelled`） | 实时更新 `elapsedMs` 与 `lastEventAgeMs` |
+| `opencode_doctor` | Lazy | 检查本机 OpenCode 原生二进制路径、`--version`，可选 `deep: true` 探测模型目录 | 纯只读诊断；拒绝 `.cmd`/`.bat`/`.ps1` |
+| `opencode_models` | Lazy | 通过 `opencode models --standalone` 列出并去重 `provider/model` ID | 支持 `provider` 前缀过滤；不触发推理 |
+| `opencode_status` | Lazy | 查询后台任务状态（`running` / `cancelling` / `completed` / `failed` / `cancelled`） | 实时更新 `elapsedMs` 与 `lastEventAgeMs` |
 | `opencode_execute` | Lazy | 在全新会话中同步执行有明确边界的任务 | 必填 `task`、`cwd`、`model`；默认超时 `900000` ms |
 | `opencode_start` | Lazy | 启动后台任务并立即返回 `jobId` | 最多 4 个并发；配合 `opencode_status` 轮询 |
 | `opencode_cancel` | Lazy | 中止指定后台任务并清理其本地进程树 | 需持续轮询 `opencode_status` 至 `cancelled` |
@@ -65,7 +65,7 @@ agy-opencode-mcp/
 │   └── version.mjs                     # 兼容源码与打包产物的版本号读取
 ├── plugins/opencode-delegate/
 │   ├── plugin.json                     # Antigravity 插件清单
-│   ├── mcp_config.json                 # MCP 配置（${PLUGIN_ROOT}/mcp/server.mjs 与 Eager/Lazy 配置）
+│   ├── mcp_config.json                 # MCP 配置（${PLUGIN_ROOT}/mcp/server.mjs，懒加载）
 │   ├── mcp/server.mjs                  # 纳入 Git 跟踪的 esbuild 单文件产物
 │   ├── assets/logo.svg                 # 插件图标
 │   └── skills/opencode-delegate/       # 委派规则（SKILL.md）与参考手册（reference.md）
